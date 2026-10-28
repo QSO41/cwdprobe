@@ -1,0 +1,33 @@
+name: Windows validation
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.11', '3.12', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Prepare ASCII root
+        shell: pwsh
+        run: |
+          $testRoot = Join-Path $env:RUNNER_TEMP ('cwdprobe-' + [guid]::NewGuid().ToString('N'))
+          if ($testRoot -notmatch '^[A-Za-z]:\\[A-Za-z0-9_.\\-]*$') { throw 'Runner temp is not a valid ASCII control root' }
+          New-Item -ItemType Directory -Path $testRoot | Out-Null
+          "CWDPROBE_TEST_ROOT=$testRoot" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - run: python tools/check.py
+      - run: python -m unittest discover -s tests -v
+      - name: Reproducible zipapp
+        shell: pwsh
+        run: |
+          python tools/build.py
+          $firstHash = (Get-FileHash dist/cwdprobe.pyz -Algorithm SHA256).Hash
+          python tools/build.py
+          if ($firstHash -ne (Get-FileHash dist/cwdprobe.pyz -Algorithm SHA256).Hash) { throw 'Build hash differs' }
+          python dist/cwdprobe.pyz --root $env:CWDPROBE_TEST_ROOT --report zipapp-report --demo good

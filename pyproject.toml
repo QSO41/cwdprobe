@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cwdprobe"
+version = "0.1.0"
+description = "A bounded Windows cwd path compatibility experiment for trusted commands"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "cwdprobe contributors" }]
+dependencies = []
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Software Development :: Testing",
+]
+
+[project.scripts]
+cwdprobe = "cwdprobe.__main__:main"
+
+[tool.setuptools]
+packages = ["cwdprobe"]
