@@ -130,7 +130,9 @@ python tools\build.py
 拒写/恢复权限、创建/移除联接。不需管理员或第三方测试包。
 构建生成可重复的 dist/cwdprobe.pyz，仍需 Python。
 
-Windows Actions 已准备 Python 3.11/3.12、默认只读和自测失败日志。
-**托管 CI：NOT TESTED**，直到 GitHub 实际运行。CLI 不上传数据；CI 仅归档合成自测失败
-日志，不宣称已有 CI 徽章。[验收范围](docs/VALIDATION.md) · [发布流程](docs/RELEASING.md)。
+**托管 CI：PASS**，实际环境为 Windows Server 2025 x64、CPython 3.11.9 和 3.12.10：
+[已观察的验收运行](https://github.com/QSO41/cwdprobe/actions/runs/40728447477)。
+两个任务均通过全部 42 项测试、可重复构建及隔离模式 zipapp 冒烟测试。
+Windows 工作流默认只读。CLI 不上传数据；CI 仅归档合成自测失败日志。
+[验收范围](docs/VALIDATION.md) · [发布流程](docs/RELEASING.md)。
 MIT 许可证，见 [LICENSE](LICENSE)。

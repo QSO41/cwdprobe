@@ -150,8 +150,10 @@ and cleanup. Some tests deny/restore permissions or create/remove junctions only
 on their own fixtures. No administrator or third-party test packages needed.
 The build creates deterministic dist/cwdprobe.pyz; it still needs Python.
 
-Windows Actions is prepared for Python 3.11/3.12, read-only default permissions
-and self-test failure logs. **Hosted CI: NOT TESTED** until run on GitHub. The CLI
-does not upload data; CI archives only synthetic self-test failure logs. No CI
-badge is claimed. [Validation](docs/VALIDATION.md) · [Release procedure](docs/RELEASING.md).
+**Hosted CI: PASS** on Windows Server 2025 x64, CPython 3.11.9 and 3.12.10:
+[observed validation run](https://github.com/QSO41/cwdprobe/actions/runs/40728447477).
+Both jobs passed all 42 tests, reproducible builds and isolated zipapp smoke tests.
+The Windows workflow has read-only default permissions. The CLI does not upload
+data; CI archives only synthetic self-test failure logs.
+[Validation](docs/VALIDATION.md) · [Release procedure](docs/RELEASING.md).
 MIT license; see [LICENSE](LICENSE).

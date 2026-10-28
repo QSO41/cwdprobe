@@ -23,7 +23,7 @@ machine-specific paths. A sanitized acceptance summary accompanies this source.
 | Forced kill / power failure filesystem cleanup | NOT TESTED | Can leave run directories; no stale-tree deletion |
 | Real affected third-party programs | NOT TESTED | Public-issue research only, no installed repros |
 | Windows 10 / ARM64 / Python 3.13+ | NOT TESTED | Outside the verified v0.1.0 release profile |
-| Hosted GitHub Actions | NOT TESTED | Workflow provided, no remote created |
+| Hosted GitHub Actions | PASS | Windows Server 2025 x64; CPython 3.11.9 / 3.12.10, 42 tests each, deterministic builds and isolated pyz smoke |
 | Offline project-local pip target installation | PASS | Existing build tools, no index/deps/download, isolated installed-package execution |
 | Actual mapped SMB drive | NOT TESTED | No network-share changes performed |
 | Account/profile/TEMP/project/executable relocation | NOT TESTED | Outside implemented scope |
@@ -41,3 +41,13 @@ R2 keeps the same core and 42 tests, prepares a Python 3.11/3.12-only Windows
 workflow, and verifies the versioned release archive. See
 [R2_RELEASE_READINESS.zh-CN.md](R2_RELEASE_READINESS.zh-CN.md) for the final local
 release preparation record. No hosted CI or publication is claimed there.
+
+R3 first hosted run exposed a test fixture that assumed the checkout path itself
+contained non-ASCII characters. The test now creates an explicit Unicode parent
+with an English leaf, preserving its full-path rejection assertions independently
+of checkout location. No core behavior changed. The failure was reproduced in a
+local ASCII checkout; both local interpreters then passed all 42 tests there.
+[Hosted run 40728447477](https://github.com/QSO41/cwdprobe/actions/runs/40728447477)
+passed both matrix jobs, all tests, two matching builds per job and 12-execution
+isolated pyz smoke tests. The initial failed run also exercised failure-log
+artifact upload. Final publication remains gated on green CI for the final commit.
