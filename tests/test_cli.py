@@ -62,9 +62,13 @@ class CliTests(unittest.TestCase):
         self.assertTrue(r["settings"]["normalize_cwd"])
 
     def test_unicode_root_refused_before_any_command(self):
-        p, r = self.cli("--root", str(PROJECT), "--demo", "good")
-        self.assertEqual(p.returncode, 2)
-        self.assertEqual(r["results"], [])
+        with tempfile.TemporaryDirectory(prefix="cwdprobe-中文-",
+                                         dir=os.environ["CWDPROBE_TEST_ROOT"]) as parent:
+            root = Path(parent) / "english"
+            root.mkdir()
+            p, r = self.cli("--root", str(root), "--demo", "good")
+            self.assertEqual(p.returncode, 2)
+            self.assertEqual(r["results"], [])
 
     def test_timeout_and_output_limit_are_inconclusive(self):
         for opts, code, state in [(["--timeout", "0.1"], "import time; time.sleep(20)", "TIMEOUT"),
