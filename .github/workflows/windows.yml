@@ -2,37 +2,65 @@ name: Windows validation
 on: [push, pull_request, workflow_dispatch]
 permissions:
   contents: read
+defaults:
+  run:
+    shell: pwsh
 jobs:
   test:
     runs-on: windows-latest
     timeout-minutes: 10
+    env:
+      PYTHONUTF8: '1'
     strategy:
       fail-fast: false
       matrix:
-        python: ['3.11', '3.12', '3.13']
+        python: ['3.11', '3.12']
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: ${{ matrix.python }}
-      - name: Prepare ASCII root
-        shell: pwsh
+      - name: Prepare isolated ASCII root and logs
         run: |
           $testRoot = Join-Path $env:RUNNER_TEMP ('cwdprobe-' + [guid]::NewGuid().ToString('N'))
           if ($testRoot -notmatch '^[A-Za-z]:\\[A-Za-z0-9_.\\-]*$') { throw 'Runner temp is not a valid ASCII control root' }
           New-Item -ItemType Directory -Path $testRoot | Out-Null
+          New-Item -ItemType Directory -Path ci-results | Out-Null
           "CWDPROBE_TEST_ROOT=$testRoot" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-      - run: python tools/check.py
-      - run: python -m unittest discover -s tests -v
-      - name: Reproducible zipapp
-        shell: pwsh
+      - name: Check source and metadata
         run: |
-          python tools/build.py
+          python tools/check.py 2>&1 | Tee-Object -FilePath ci-results/checks.log
+          exit $LASTEXITCODE
+      - name: Run all tests
+        run: |
+          python -m unittest discover -s tests -v 2>&1 | Tee-Object -FilePath ci-results/tests.log
+          exit $LASTEXITCODE
+      - name: Reproducible zipapp and isolated smoke
+        run: |
+          python tools/build.py 2>&1 | Tee-Object -FilePath ci-results/build-first.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $firstHash = (Get-FileHash dist/cwdprobe.pyz -Algorithm SHA256).Hash
-          python tools/build.py
+          python tools/build.py 2>&1 | Tee-Object -FilePath ci-results/build-second.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if ($firstHash -ne (Get-FileHash dist/cwdprobe.pyz -Algorithm SHA256).Hash) { throw 'Build hash differs' }
-          python dist/cwdprobe.pyz --root $env:CWDPROBE_TEST_ROOT --report zipapp-report --demo good
+          $archivePath = Join-Path $env:GITHUB_WORKSPACE 'dist/cwdprobe.pyz'
+          $reportPath = Join-Path $env:GITHUB_WORKSPACE 'ci-results/zipapp-report'
+          Push-Location $env:RUNNER_TEMP
+          try {
+            python -I -S $archivePath --version 2>&1 | Tee-Object -FilePath (Join-Path $env:GITHUB_WORKSPACE 'ci-results/version.log')
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            python -I -S $archivePath --root $env:CWDPROBE_TEST_ROOT --report $reportPath --demo good 2>&1 | Tee-Object -FilePath (Join-Path $env:GITHUB_WORKSPACE 'ci-results/smoke.log')
+            exit $LASTEXITCODE
+          } finally {
+            Pop-Location
+          }
+      - name: Preserve self-test failure logs
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: windows-python-${{ matrix.python }}-failure-logs
+          path: ci-results/*.log
+          if-no-files-found: ignore
+          retention-days: 7

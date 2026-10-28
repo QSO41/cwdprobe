@@ -1,159 +1,157 @@
 # cwdprobe
 
-Run a trusted Windows command in six fresh working-directory paths and keep a
-local, conservative compatibility report. Python 3.11+; no runtime dependencies.
-Local release candidate, not yet published. Python/Node external smoke commands
-have been checked; reproductions of real third-party bugs remain unverified.
+**Check whether a trusted Windows command behaves differently under different
+working-directory names.** Run one command in an ASCII control plus Chinese,
+Japanese, Korean, space and valid punctuation directories, with two fresh runs
+per case by default. Read the local text/JSON report.
 
-[简体中文](README.zh-CN.md) · [Product research](docs/RESEARCH.md) · [Report contract](docs/REPORT.md)
+[简体中文](README.zh-CN.md) · [v0.1.0 notes](docs/releases/v0.1.0.md) · [Report format](docs/REPORT.md)
 
-[R1 quality review (中文)](docs/R1_QUALITY_REVIEW.zh-CN.md)
+Useful for CLI smoke tests that open relative files. It saves writing the matrix,
+Windows process-tree handling, bounded byte capture and comparison report.
+An existing pytest or PowerShell suite may already meet your needs.
 
-Useful for a CLI smoke command that opens relative files. It automates an ASCII
-control, Chinese/Japanese/Korean, spaces and valid ASCII punctuation. This is a
-small experiment runner, not comprehensive Unicode certification.
+**Verified v0.1.0 profile: Windows 11 x64, native CPython 3.11 or 3.12.**
+Windows 10, ARM64, Python 3.13 and later are **NOT TESTED**. The package metadata's
+Python 3.11 minimum is not a broader support guarantee.
 
-## Quick start (PowerShell 7)
+## Run without installing
 
-Use a normal, non-administrator Windows terminal. From this checkout:
+From a source checkout/extracted source folder, open a normal PowerShell 7
+terminal with a verified native Python on PATH. No runtime packages to install.
 
-```powershell
-python --version  # Python 3.11 or newer, native Windows
-New-Item -ItemType Directory -Path C:\cwdprobe-work  # choose a NEW writable ASCII location
-New-Item -ItemType Directory -Path reports
-python -m cwdprobe --root C:\cwdprobe-work --report reports\good --demo good
-python -m cwdprobe --root C:\cwdprobe-work --report reports\bad --demo ascii-only
-```
+~~~powershell
+python --version
+python -m cwdprobe --version
+python -m cwdprobe --help
+~~~
 
-The first fixture creates and reads multilingual filenames in all six cwd cases,
-twice. The second is deliberately broken: it exits 23 only under non-ASCII cwd.
-Expected summaries: `PASS / NO_DIFFERENCE_OBSERVED` and
-`FAIL / PATH_SENSITIVE_FAILURE`. Reusing a report directory is refused; pick a new
-name for each run. If creating a drive-root directory is not permitted, choose an
-existing writable ASCII root or create one under an ASCII location you own.
-Never solve this by elevating the test.
+Alternatively, use the release archive:
 
-## Test your command
+~~~powershell
+python .\cwdprobe-0.1.0.pyz --version
+python .\cwdprobe-0.1.0.pyz --help
+Get-FileHash .\cwdprobe-0.1.0.pyz -Algorithm SHA256
+~~~
 
-Only run software you trust. **This is not a security sandbox.** A command has
-your permissions and inherited environment; it can change files outside the
-test directories, make network requests or run other programs. cwdprobe itself
-does not upload reports or scan for programs.
+Compare the hash with SHA256SUMS.txt. **The pyz still requires a supported native
+Windows Python interpreter. It is not a standalone EXE.** For archive use, replace
+"python -m cwdprobe" below with "python .\cwdprobe-0.1.0.pyz"; no checkout is needed.
+Optional source installation into your chosen environment: "python -m pip install ."
+(needs setuptools to build).
 
-```powershell
-python -m cwdprobe --root C:\cwdprobe-work --report reports\my-app --timeout 10 -- C:\tools\my-app.exe --self-test
-```
+## First real command
 
-An absolute `.exe` path is preferred. An executable name on an absolute PATH
-entry is resolved once; the same resolved executable is used in every case.
-Pass script interpreters explicitly, e.g. `-- C:\Python312\python.exe C:\my-tests\probe.py`.
-Use absolute paths for the script and fixed resources. Relative data arguments
-are relative to each new cwd; the directories start empty. Batch files are
-refused. The tool passes an argument array with `shell=False`; it does not parse
-a shell command string or automatically escape an explicit interpreter's code.
-Programs with custom nonstandard Windows command-line parsers may differ from
-the standard C-runtime argument rules.
+Choose a writable local **ASCII-only root you own**; edit the example if needed.
+The full path must contain only letters, digits, underscore, dot, hyphen and
+directory separators, with no reparse ancestors. An English folder below a
+Chinese user profile is not an ASCII control. Do not elevate to obtain access.
 
-A copyable external-command example using the included standalone IO script:
-
-```powershell
+~~~powershell
+$testRoot = 'C:\cwdprobe-work' # choose your own writable ASCII location
+New-Item -ItemType Directory -Path $testRoot # skip if it already exists
+New-Item -ItemType Directory -Path .\reports -Force | Out-Null
 $pythonExe = (Get-Command python).Source
+python -m cwdprobe --root $testRoot --report reports\python-version -- $pythonExe --version
+Get-Content .\reports\python-version\report.txt
+~~~
+
+This executes the actual installed Python twelve times, not an internal demo.
+Use a **new report directory name every time**. Its parent must exist; existing
+report directories are never overwritten.
+
+From a source checkout, use the standalone relative-file IO test:
+
+~~~powershell
 $probeScript = (Resolve-Path .\examples\relative_io.py).Path
-python -m cwdprobe --root C:\cwdprobe-work --report reports\relative-io -- $pythonExe $probeScript
-```
+python -m cwdprobe --root $testRoot --report reports\relative-io -- $pythonExe $probeScript
+~~~
 
-Options: `--repeats 1..10` (default 2), `--timeout` (default 10 seconds per case),
-`--max-bytes` (default 1 MiB per stream; maximum 16 MiB), `--encoding utf-8`
-(or the actual expected text codec, e.g. `gbk`), `--normalize-cwd` (optional exact
-cwd substitution during text comparison, keeping original text/bytes).
-The encoding option changes decoding only; it does not change a child's locale.
+It writes/reads multilingual and space filenames and asserts their contents.
+To test your app, replace everything after "--" with its trusted executable and
+arguments, e.g. "-- C:\tools\my-app.exe --self-test". Use absolute script/resource
+paths; relative data arguments resolve in each initially empty cwd. Prefer an
+absolute .exe; a PATH .exe name is resolved once. Batch files need an explicit
+interpreter. Arguments use an array and shell=False; code passed to an explicit
+shell/interpreter is still your responsibility.
 
-## Interpret a report
+**Trusted commands only: this is not a security sandbox.** Commands inherit your
+permissions and environment and can access other files or the network. cwdprobe
+does not scan for apps, upload reports or change permanent system settings.
 
-| Status / finding | Meaning | CLI code |
+## Read the result
+
+| Status / finding | Meaning | Exit |
 | --- | --- | --- |
-| PASS / NO_DIFFERENCE_OBSERVED | Every sample completed with exit 0 and stable comparable output | 0 |
-| FAIL / PATH_SENSITIVE_FAILURE | ASCII succeeded; a variant returned nonzero consistently | 1 |
-| FAIL / GENERAL_FAILURE | All samples returned nonzero consistently | 1 |
-| INCONCLUSIVE / BASELINE_FAILURE | ASCII failed but some other samples succeeded | 3 |
-| INCONCLUSIVE | Timeout, output cap, decode failure, changing repeats or output differences | 3 |
-| TOOL_ERROR | Setup, launch, capture, containment, cleanup or report problem | 2 |
-| INTERRUPTED | KeyboardInterrupt, followed by cleanup where possible | 130 |
+| PASS / NO_DIFFERENCE_OBSERVED | All samples exit 0 with stable comparable output | 0 |
+| FAIL / PATH_SENSITIVE_FAILURE | ASCII succeeds; a variant consistently exits nonzero | 1 |
+| FAIL / GENERAL_FAILURE | Every sample consistently exits nonzero | 1 |
+| INCONCLUSIVE / BASELINE_FAILURE | ASCII fails but another case succeeds | 3 |
+| INCONCLUSIVE | Timeout, output cap, decoding, unstable repeats or output differences | 3 |
+| TOOL_ERROR | Setup, launch, capture, cleanup or report could not complete | 2 |
+| INTERRUPTED | Ctrl+C/KeyboardInterrupt, with cleanup where possible | 130 |
 
-An observed path-sensitive exit failure is **not a diagnosis of Unicode
-causality**. Exit 0 does not prove correct application behavior: your command
-must assert the behavior you care about. Plain output differences are never
-automatically failures. With fresh repeat directories, the exact cwd is ignored
-only when detecting repeat instability; cross-case comparison normalizes it
-only when `--normalize-cwd` is requested. No timestamps/random IDs are erased.
+Path sensitivity **does not establish a Unicode encoding root cause**. Exit 0
+needs an app-specific smoke test to assert functional correctness. Plain output
+differences are not program failures. Optional --normalize-cwd substitutes only
+the exact cwd for cross-case text comparison, preserving raw evidence. Repeat
+stability always ignores that known exact cwd change between fresh runs.
 
-`report.txt` contains the readable table; `report.json` contains full argv,
-settings, context, exact cwd/codepoints, states, exit codes, timings, raw captured
-byte prefixes (base64), hashes and strict decoding errors. Review reports before
-sharing: paths, arguments and child output may contain private data. `reports/`
-and `local-acceptance/` are ignored by Git. Reports are not auto-uploaded.
+report.txt is the summary. report.json contains resolved argv, EXE SHA-256,
+settings, OS/codepage context, paths/codepoints, states, timings, raw stdout/stderr
+prefixes, hashes and strict decoding diagnostics. Scripts/dependencies/full
+environment are not snapshotted. Review reports before sharing: paths, arguments
+and output may be private; base64 is not redaction.
 
-## Boundaries and cleanup
+Options: --repeats 1..10 (default 2), --timeout seconds (default 10),
+--max-bytes per stream/run (default 1 MiB, maximum 16 MiB), --encoding utf-8,
+--normalize-cwd. See --help. Encoding changes decoding only, not the child locale.
+High limits/repeats increase report memory. The timeout cannot preempt a blocked
+Windows CreateProcess or the EXE hashing before execution.
 
-The complete test root must be an existing ASCII local-drive absolute path with
-letters/digits/underscore/dot/hyphen/separators only, and no reparse ancestors.
-An English leaf inside a Chinese user profile is rejected as an ASCII control.
-All test work lives inside a new random `cwdprobe-<id>` child. The selected root
-itself is never deleted. Equal-length case leaves reduce one length confound but
-do not make this a controlled proof of a character-only cause.
+## Cleanup and troubleshooting
 
-Children start suspended, enter a kill-on-close Windows Job Object, then resume.
-Containment setup failure stops the child before user code runs. Timeout, output
-limit and normal completion close the job, ending remaining descendants. Programs
-that intentionally spawn persistent services are unsuitable for this runner.
-This is lifecycle containment, not a security boundary or disk/CPU/memory quota.
-The timeout accounts for child startup, but cannot preempt a blocked Windows
-CreateProcess call or the executable hashing that precedes execution.
+Normal completion removes only its new owned cwdprobe-<id> directory. The chosen
+root and reports remain; review/delete your selected reports yourself. Job Objects
+end remaining descendants on timeout, output cap and parent exit. Ctrl+C is
+deferred during short ownership transitions, then reported safely. Force-kill,
+power loss or unsafe/locked contents can leave directories. There is no old-run
+cleanup command or automatic deletion of stale runs.
 
-Cleanup verifies a per-run ownership marker and directory identity. It inventories
-without following links, locks ancestors against rename/write opens, deletes
-through verified Windows handles, refuses reparse points/hard links/special files, and
-retains unsafe or locked output with a TOOL_ERROR. Do not modify a run tree from
-another process during execution. It is not designed to resist malicious
-concurrent filesystem races. Ctrl+C normally triggers cleanup; force-killing the
-runner or power loss can leave files. There is no automatic stale-tree deletion.
-During short startup and cleanup ownership transitions, Ctrl+C is deferred until
-resources can be handled safely, then reported as interruption. A partial
-ownership-marker initialization is retained with its exact workspace path,
-TOOL_ERROR and cleanup FAIL; it is not silently claimed to have been removed.
+| Symptom | Next step |
+| --- | --- |
+| Root / SETUP_ERROR | Check the full root is existing, ASCII, local and writable; choose another owned location without elevating. |
+| Report directory error | Create its parent and choose a new leaf; no new report is written when directory setup fails. |
+| LAUNCH_ERROR / EXECUTION_ERROR | Read the row's error in JSON; verify absolute EXE/script paths and interpreter. |
+| DECODE_ERROR | Check the producer's actual codec, inspect raw bytes, then select e.g. --encoding gbk if appropriate. |
+| TIMEOUT / OUTPUT_LIMIT | Review the trusted command, then adjust its limit if needed; this is inconclusive, not a Unicode diagnosis. |
+| CLEANUP_ERROR / partial owner setup | Inspect the exact workspace, close only your own handles and review contents/links before manual removal. Never delete the selected root or unrelated directories. |
 
-Not supported: TEMP/TMP variation, new Windows accounts, profile/registry/ACL
-simulation, executable/project relocation, fixture copying, interactive/GUI apps,
-UNC/device paths, long-path validation or repair. Native Windows execution only;
-WSL/Linux results are not Windows verification. The parent environment, Python
-installation and external dependencies are not relocated or fully snapshotted.
+Cleanup uses verified Windows handles and refuses reparse points, hard links,
+replaced ownership and special files. Partial owner setup is retained with cleanup
+FAIL and its original error. Do not modify an active run tree concurrently.
 
-## Development and reproducible portable archive
+## Scope, development and CI
 
-```powershell
-$env:CWDPROBE_TEST_ROOT = 'C:\cwdprobe-work'
+Only cwd variation is implemented: no account/profile simulation, TEMP/TMP matrix,
+codepage changes, executable/project relocation, fixture copying, long-path
+certification, interactive/GUI support or repair. WSL/Linux is not Windows
+verification. Real third-party bug reproductions remain NOT TESTED.
+
+~~~powershell
+$env:CWDPROBE_TEST_ROOT = $testRoot # dedicated test root, not a shared work folder
 python -m unittest discover -s tests -v
 python tools\check.py
 python tools\build.py
-python dist\cwdprobe.pyz --root C:\cwdprobe-work --report reports\archive --demo good
-```
+~~~
 
-The test root must be dedicated to these tests. Tests launch only self-written
-Python fixtures; one test denies then restores create permissions on its own
-ephemeral directory, and another creates/removes its own junction. No admin,
-third-party test dependencies, network access or system configuration changes.
+The 42 meaningful tests cover lifecycle, arguments, IO, diagnosis, classification
+and cleanup. Some tests deny/restore permissions or create/remove junctions only
+on their own fixtures. No administrator or third-party test packages needed.
+The build creates deterministic dist/cwdprobe.pyz; it still needs Python.
 
-`build.py` produces a deterministic ZIP application with fixed timestamps and
-sorted source entries. It needs the Python runtime; it is not a standalone exe.
-Build twice and compare SHA-256. Alternatively, `python -m pip install .` installs
-the CLI in your chosen environment (optional; setuptools is needed for packaging).
-Source and zipapp use only the standard library, so no installation is necessary.
-
-The included Windows GitHub Actions workflow is ready for a future repository;
-hosted CI is **NOT TESTED** until it actually runs. Local acceptance is Windows 11
-x64 / Python 3.11 and 3.12; other supported versions remain unverified. See
-[validation](docs/VALIDATION.md). MIT license.
-
-For a complete local evidence bundle (tests, two builds and sample reports), run
-`python tools/accept.py --root C:\cwdprobe-work` in a non-administrator terminal.
-Each invocation creates a new ignored `local-acceptance/run-<id>` directory.
+Windows Actions is prepared for Python 3.11/3.12, read-only default permissions
+and self-test failure logs. **Hosted CI: NOT TESTED** until run on GitHub. The CLI
+does not upload data; CI archives only synthetic self-test failure logs. No CI
+badge is claimed. [Validation](docs/VALIDATION.md) · [Release procedure](docs/RELEASING.md).
+MIT license; see [LICENSE](LICENSE).

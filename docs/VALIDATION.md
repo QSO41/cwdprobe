@@ -22,7 +22,7 @@ machine-specific paths. A sanitized acceptance summary accompanies this source.
 | Physical keyboard / particular terminal emulator / console closing | NOT TESTED | Controlled OS event is not a human keypress or close-window test |
 | Forced kill / power failure filesystem cleanup | NOT TESTED | Can leave run directories; no stale-tree deletion |
 | Real affected third-party programs | NOT TESTED | Public-issue research only, no installed repros |
-| Windows 10 / ARM64 / Python 3.13 | NOT TESTED | Intended range, not locally available |
+| Windows 10 / ARM64 / Python 3.13+ | NOT TESTED | Outside the verified v0.1.0 release profile |
 | Hosted GitHub Actions | NOT TESTED | Workflow provided, no remote created |
 | Offline project-local pip target installation | PASS | Existing build tools, no index/deps/download, isolated installed-package execution |
 | Actual mapped SMB drive | NOT TESTED | No network-share changes performed |
@@ -36,3 +36,8 @@ commands is not claimed. Functional correctness depends on the user's smoke test
 R1 independently reran the original 35 tests before changes and added seven
 startup/cleanup regressions. Current review details and evidence references are
 in [R1_QUALITY_REVIEW.zh-CN.md](R1_QUALITY_REVIEW.zh-CN.md).
+
+R2 keeps the same core and 42 tests, prepares a Python 3.11/3.12-only Windows
+workflow, and verifies the versioned release archive. See
+[R2_RELEASE_READINESS.zh-CN.md](R2_RELEASE_READINESS.zh-CN.md) for the final local
+release preparation record. No hosted CI or publication is claimed there.

@@ -8,3 +8,15 @@ local-acceptance/
 reports/
 .coverage
 *.log
+ci-results/
+*.pyz
+*.whl
+report.json
+report.txt
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
