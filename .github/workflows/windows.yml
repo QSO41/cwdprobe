@@ -5,13 +5,16 @@ permissions:
 jobs:
   test:
     runs-on: windows-latest
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
         python: ['3.11', '3.12', '3.13']
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python }}
       - name: Prepare ASCII root
@@ -27,7 +30,9 @@ jobs:
         shell: pwsh
         run: |
           python tools/build.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $firstHash = (Get-FileHash dist/cwdprobe.pyz -Algorithm SHA256).Hash
           python tools/build.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if ($firstHash -ne (Get-FileHash dist/cwdprobe.pyz -Algorithm SHA256).Hash) { throw 'Build hash differs' }
           python dist/cwdprobe.pyz --root $env:CWDPROBE_TEST_ROOT --report zipapp-report --demo good

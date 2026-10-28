@@ -54,20 +54,28 @@ def validate_root(root):
     return resolved
 
 
+class WorkspaceInitializationError(OSError):
+    """A newly allocated directory is retained when ownership setup fails."""
+
+    def __init__(self, path, cause):
+        self.path = path
+        super().__init__(f"Workspace initialization failed; retained {path}: {cause}")
+
+
 class Workspace:
     def __init__(self, root):
         self.root = validate_root(root)
         self.token = uuid.uuid4().hex
         self.path = self.root / ("cwdprobe-" + self.token)
         self.path.mkdir()
-        self.identity = (self.path.stat().st_dev, self.path.stat().st_ino)
         try:
+            self.identity = (self.path.stat().st_dev, self.path.stat().st_ino)
             with (self.path / ".cwdprobe-owner").open("x", encoding="ascii") as f:
                 f.write(self.token)
-        except BaseException:
-            # Only this empty directory was created; no recursive deletion.
-            self.path.rmdir()
-            raise
+        except (OSError, ValueError) as exc:
+            # The ownership marker may be partial. Do not guess that it is safe
+            # to delete; preserve both the allocated path and original failure.
+            raise WorkspaceInitializationError(self.path, exc) from exc
 
     def verify(self):
         validate_chain(self.path)

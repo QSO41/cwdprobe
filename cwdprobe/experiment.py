@@ -11,7 +11,7 @@ import sys
 
 from . import __version__
 from .analysis import classify
-from .workspace import CASES, Workspace, checked_stat
+from .workspace import CASES, Workspace, WorkspaceInitializationError, checked_stat
 
 
 def resolve_command(command):
@@ -46,7 +46,7 @@ def resolve_command(command):
 
 def run_experiment(command, root, repeats=2, timeout=10.0, max_bytes=1048576,
                    encoding="utf-8", normalize_cwd=False):
-    from .process import run_process
+    from .process import _defer_sigint, run_process
 
     report = {
         "schema_version": 1, "tool": "cwdprobe", "version": __version__,
@@ -74,7 +74,8 @@ def run_experiment(command, root, repeats=2, timeout=10.0, max_bytes=1048576,
         report["command"] = command
         with open(command[0], "rb") as f:
             report["executable_sha256"] = hashlib.file_digest(f, "sha256").hexdigest()
-        workspace = Workspace(root)
+        with _defer_sigint():
+            workspace = Workspace(root)
         report["workspace"] = str(workspace.path)
         for repeat in range(1, repeats + 1):
             for case, leaf in CASES.items():
@@ -88,6 +89,11 @@ def run_experiment(command, root, repeats=2, timeout=10.0, max_bytes=1048576,
                     return report
     except KeyboardInterrupt:
         report["summary"] = {"status": "INTERRUPTED", "finding": "INTERRUPTED"}
+    except WorkspaceInitializationError as exc:
+        report["workspace"] = str(exc.path)
+        report["cleanup"] = {"status": "FAIL", "error": "Partial ownership setup; directory retained"}
+        report["summary"] = {"status": "TOOL_ERROR", "finding": "SETUP_ERROR"}
+        report["error"] = str(exc)
     except (OSError, ValueError) as exc:
         report["summary"] = {"status": "TOOL_ERROR", "finding": "SETUP_ERROR"}
         report["error"] = str(exc)
@@ -95,9 +101,14 @@ def run_experiment(command, root, repeats=2, timeout=10.0, max_bytes=1048576,
         if "summary" not in report:
             report["summary"] = classify(report["results"], normalize_cwd)
         if workspace:
+            report["workspace"] = str(workspace.path)
             try:
-                workspace.cleanup()
-                report["cleanup"] = {"status": "PASS"}
+                with _defer_sigint():
+                    workspace.cleanup()
+                    report["cleanup"] = {"status": "PASS"}
+            except KeyboardInterrupt:
+                if report["summary"]["status"] != "TOOL_ERROR":
+                    report["summary"] = {"status": "INTERRUPTED", "finding": "INTERRUPTED"}
             except (OSError, ValueError) as exc:
                 report["cleanup"] = {"status": "FAIL", "error": str(exc)}
                 report["summary"] = {"status": "TOOL_ERROR", "finding": "CLEANUP_ERROR"}

@@ -2,9 +2,12 @@
 
 Run a trusted Windows command in six fresh working-directory paths and keep a
 local, conservative compatibility report. Python 3.11+; no runtime dependencies.
-Early local MVP, not yet published or validated against real third-party apps.
+Local release candidate, not yet published. Python/Node external smoke commands
+have been checked; reproductions of real third-party bugs remain unverified.
 
 [简体中文](README.zh-CN.md) · [Product research](docs/RESEARCH.md) · [Report contract](docs/REPORT.md)
+
+[R1 quality review (中文)](docs/R1_QUALITY_REVIEW.zh-CN.md)
 
 Useful for a CLI smoke command that opens relative files. It automates an ASCII
 control, Chinese/Japanese/Korean, spaces and valid ASCII punctuation. This is a
@@ -51,6 +54,14 @@ a shell command string or automatically escape an explicit interpreter's code.
 Programs with custom nonstandard Windows command-line parsers may differ from
 the standard C-runtime argument rules.
 
+A copyable external-command example using the included standalone IO script:
+
+```powershell
+$pythonExe = (Get-Command python).Source
+$probeScript = (Resolve-Path .\examples\relative_io.py).Path
+python -m cwdprobe --root C:\cwdprobe-work --report reports\relative-io -- $pythonExe $probeScript
+```
+
 Options: `--repeats 1..10` (default 2), `--timeout` (default 10 seconds per case),
 `--max-bytes` (default 1 MiB per stream; maximum 16 MiB), `--encoding utf-8`
 (or the actual expected text codec, e.g. `gbk`), `--normalize-cwd` (optional exact
@@ -96,6 +107,8 @@ Containment setup failure stops the child before user code runs. Timeout, output
 limit and normal completion close the job, ending remaining descendants. Programs
 that intentionally spawn persistent services are unsuitable for this runner.
 This is lifecycle containment, not a security boundary or disk/CPU/memory quota.
+The timeout accounts for child startup, but cannot preempt a blocked Windows
+CreateProcess call or the executable hashing that precedes execution.
 
 Cleanup verifies a per-run ownership marker and directory identity. It inventories
 without following links, locks ancestors against rename/write opens, deletes
@@ -104,6 +117,10 @@ retains unsafe or locked output with a TOOL_ERROR. Do not modify a run tree from
 another process during execution. It is not designed to resist malicious
 concurrent filesystem races. Ctrl+C normally triggers cleanup; force-killing the
 runner or power loss can leave files. There is no automatic stale-tree deletion.
+During short startup and cleanup ownership transitions, Ctrl+C is deferred until
+resources can be handled safely, then reported as interruption. A partial
+ownership-marker initialization is retained with its exact workspace path,
+TOOL_ERROR and cleanup FAIL; it is not silently claimed to have been removed.
 
 Not supported: TEMP/TMP variation, new Windows accounts, profile/registry/ACL
 simulation, executable/project relocation, fixture copying, interactive/GUI apps,

@@ -27,6 +27,14 @@ python -m cwdprobe --root C:\cwdprobe-work --report reports\bad --demo ascii-onl
 python -m cwdprobe --root C:\cwdprobe-work --report reports\app -- C:\tools\app.exe --self-test
 ```
 
+使用已有 Python 和独立读写脚本的可复制示例：
+
+```powershell
+$pythonExe = (Get-Command python).Source
+$probeScript = (Resolve-Path .\examples\relative_io.py).Path
+python -m cwdprobe --root C:\cwdprobe-work --report reports\relative-io -- $pythonExe $probeScript
+```
+
 请只运行可信命令。**这不是安全沙箱**，命令拥有当前用户权限，可访问外部文件或
 网络。工具本身不上传报告，不扫描运行其他项目。参数按数组传递，不拼接 Shell；
 脚本需要显式指定解释器和脚本的绝对路径。各样例 cwd 初始为空，不复制项目。
@@ -52,6 +60,9 @@ python -m cwdprobe --root C:\cwdprobe-work --report reports\app -- C:\tools\app.
 保留目录并报错。超时和正常父进程退出都会关闭 Job Object，结束遗留后代进程。
 强制结束工具、断电或恶意并发改目录不在清理保证内。报告可能含私有路径或命令输出，
 分享前自行检查；默认报告目录已加入 gitignore。
+启动与清理的短暂资源归属转换期间会延后处理 Ctrl+C，完成安全处置后报告中断。
+如果归属标记初始化不完整，目录会保留，报告给出确切路径并标为 TOOL_ERROR、
+cleanup FAIL。超时不能抢占 Windows 本身阻塞的 CreateProcess 调用或执行前的哈希计算。
 
 测试与构建：
 
@@ -67,3 +78,5 @@ python dist\cwdprobe.pyz --root C:\cwdprobe-work --report reports\archive --demo
 详见[竞品与需求证据](docs/RESEARCH.md)、[报告约定](docs/REPORT.md)及
 [验收范围](docs/VALIDATION.md)。本地验证 Windows 11 x64 / Python 3.11、3.12，
 其他版本和 GitHub 托管 CI 不冒充已通过。许可证：MIT。
+
+本轮结论、真实外部命令与控制台中断证据见 [R1 质量审查](docs/R1_QUALITY_REVIEW.zh-CN.md)。

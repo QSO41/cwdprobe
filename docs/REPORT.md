@@ -41,3 +41,9 @@ Failure to create a report directory / parse CLI arguments returns 2 and prints
 an error without pretending a report was written. A report-write failure may leave
 a partial new directory; nothing existing is overwritten. Cleanup failure returns
 TOOL_ERROR and retains the path in workspace. No automatic recovery deletion.
+If directory creation succeeds but identity/ownership-marker setup fails,
+workspace names the retained directory, cleanup is FAIL, and summary is
+TOOL_ERROR / SETUP_ERROR with the original failure. Partial ownership is never
+used as authority for recursive deletion. Ctrl+C during short startup/cleanup
+ownership transitions is deferred; successful cleanup is still reported, and
+an existing TOOL_ERROR retains precedence over a later interrupt.
