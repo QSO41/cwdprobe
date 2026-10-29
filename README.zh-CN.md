@@ -13,60 +13,87 @@
 Windows 10、ARM64、Python 3.13 及更高版本均为 **NOT TESTED**。
 包元信息的 Python 3.11 最低要求不是更广泛的支持保证。
 
-## 无需安装即可运行
+## 从 Release 快速开始
 
-在源码检出/解压目录中打开普通 PowerShell 7，确认 PATH 中的原生 Python。
-不需要安装运行时第三方包。
+在 [v0.1.0 Release 附件](https://github.com/QSO41/cwdprobe/releases/tag/v0.1.0)下载
+**cwdprobe-0.1.0.pyz** 和 **SHA256SUMS.txt**，不需要源码 ZIP 或克隆仓库。
+在下载目录打开普通的**原生 Windows PowerShell 7**，确认 PATH 中有 Python 3.11 或 3.12。
+**pyz 仍需 Python，不是独立 EXE。** 无运行时第三方包需要安装；不能用 WSL/Linux 代替。
 
-~~~powershell
-python --version
-python -m cwdprobe --version
-python -m cwdprobe --help
-~~~
-
-也可使用发布归档：
+### 1. 检查 Python 和归档
 
 ~~~powershell
-python .\cwdprobe-0.1.0.pyz --version
-python .\cwdprobe-0.1.0.pyz --help
-Get-FileHash .\cwdprobe-0.1.0.pyz -Algorithm SHA256
+$pythonExe = (Get-Command python -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
+& $pythonExe --version
+& $pythonExe -c "import os, sys; print(os.name, sys.executable)"
+$expectedHash = ((Get-Content .\SHA256SUMS.txt -Raw).Trim() -split '\s+')[0]
+$actualHash = (Get-FileHash .\cwdprobe-0.1.0.pyz -Algorithm SHA256).Hash
+if ($actualHash -ne $expectedHash) { throw 'SHA-256 mismatch; stop here' }
+& $pythonExe .\cwdprobe-0.1.0.pyz --version
 ~~~
 
-与 SHA256SUMS.txt 比较。**pyz 仍需要受支持的 Windows Python，不是独立 EXE。**
-以下的 "python -m cwdprobe" 可替换为 "python .\cwdprobe-0.1.0.pyz"，运行归档不需源码。
-也可在自己的环境中 "python -m pip install ." 安装源码，构建需要 setuptools。
+确认第一处版本为 **3.11.x 或 3.12.x**，平台行以 **nt** 开头，归档版本为 **0.1.0**。
+Python 不存在或不在该范围时先停止。哈希比较不区分大小写，不匹配则中止代码块；
+校验和可发现字节不一致，并不验证发布者身份。
 
-## 第一个真实外部命令
+### 2. 准备测试根目录
 
-选择自己有写权限的**完整纯 ASCII 本地根目录**，按需改示例。完整路径只允许字母、
-数字、下划线、点、连字符及目录分隔符，且所有祖先不能是重解析点。
-中文用户目录中的英文子目录不算 ASCII 基准。不要为获得权限而提权。
+在**自己拥有且可写、已存在的本地 ASCII 父目录**下选择专用文件夹。
+例如只有当 `D:\work` 属于你且可写时，才使用 `D:\work\cwdprobe-work`。
+在提示中输入完整绝对路径，下面的代码会在目标不存在时创建它。
+cwdprobe 启动时 `--root` 必须已经存在；检查的是**完整路径及所有父目录**，
+盘符后只允许字母、数字、下划线、点、连字符和目录分隔符，不能有路径穿越或重解析祖先。
+中文用户目录下的英文子目录不算 ASCII 基准。不要提权，也不要自动切换到 TEMP/TMP
+掩盖要求。如果没有合适的位置，先停止；这不代表被测应用失败。
 
 ~~~powershell
-$testRoot = 'C:\cwdprobe-work' # 改成自己有权限的 ASCII 位置
-New-Item -ItemType Directory -Path $testRoot # 已有则跳过
-New-Item -ItemType Directory -Path .\reports -Force | Out-Null
-$pythonExe = (Get-Command python).Source
-python -m cwdprobe --root $testRoot --report reports\python-version -- $pythonExe --version
-Get-Content .\reports\python-version\report.txt
+$testRoot = Read-Host 'Full ASCII path for a dedicated test root you own'
+if (-not (Test-Path -LiteralPath $testRoot)) {
+    New-Item -ItemType Directory -Path $testRoot -ErrorAction Stop | Out-Null
+}
 ~~~
 
-这会真实执行已安装的 Python 十二次，不是内置 Demo。**每次要换新报告目录名**；
-父目录必须存在，已有报告目录绝不覆盖。
+### 3. 执行真实的外部文件 IO 命令
 
-在源码目录中使用独立的相对文件读写脚本：
+下面的自包含命令调用已安装的 Python，在每个新 cwd 中创建并读取中文、日文、韩文及
+含空格的文件名，检查内容一致。不依赖源码或内置 Demo。
+代码按需创建报告父目录；**不要提前创建报告目标目录**，它由 cwdprobe 创建。
+`--report` 的父目录必须已存在，目标每次必须全新；GUID 自动换新报告名，绝不覆盖旧报告。
+
+**只运行可信命令：这不是安全沙箱。** 命令继承当前用户权限和环境，可访问其他文件或网络。
 
 ~~~powershell
-$probeScript = (Resolve-Path .\examples\relative_io.py).Path
-python -m cwdprobe --root $testRoot --report reports\relative-io -- $pythonExe $probeScript
+$reportParent = Join-Path (Get-Location).Path 'reports'
+if (-not (Test-Path -LiteralPath $reportParent)) {
+    New-Item -ItemType Directory -Path $reportParent -ErrorAction Stop | Out-Null
+}
+$report = Join-Path $reportParent ('io-' + [guid]::NewGuid().ToString('N'))
+$code = @'
+from pathlib import Path
+payload = '中文 / 日本語 / 한국어 / "quoted text"'
+for name in ('中文 file.txt', '日本語.txt', '한국어.txt'):
+    path = Path(name)
+    path.write_text(payload, encoding='utf-8')
+    if path.read_text(encoding='utf-8') != payload:
+        raise SystemExit('roundtrip mismatch')
+print('relative-io-ok')
+'@
+& $pythonExe .\cwdprobe-0.1.0.pyz --root $testRoot --report $report -- $pythonExe -c $code
+$testExit = $LASTEXITCODE
+Get-Content (Join-Path $report 'report.txt')
+"cwdprobe exit: $testExit"
 ~~~
 
-脚本创建并读取多语言/空格文件名，断言内容一致。测试自己应用时，把 "--" 后内容换成
-可信程序和参数，如 "-- C:\tools\my-app.exe --self-test"。脚本/固定资源使用绝对路径；
+预期 `PASS: NO_DIFFERENCE_OBSERVED | 12 executions | cleanup=PASS`，退出码 0。
+先看报告首行状态、路径矩阵和 Cleanup；原始输出和详情在 JSON 中。
+这是自建安全 IO 样例，不是真实第三方故障复现；PASS 只覆盖此次命令和这些路径样本。
+
+测试自己的应用时，只把 **`--` 后**的命令换成可信程序和参数，
+如 `-- C:\tools\my-app.exe --self-test`；`--` 前是 cwdprobe 参数。
+每次重新生成报告名。脚本/固定资源使用绝对路径；
 相对数据参数指向各个初始为空的 cwd。优先用绝对 EXE，PATH 中的 EXE 名称只解析一次。
 批处理需显式指定解释器。参数采用数组及 shell=False；显式 Shell/解释器代码仍由使用者负责。
 
-**只运行可信命令：这不是安全沙箱。** 命令继承当前用户权限和环境，可访问其他文件或网络。
 工具不扫描应用、不上传报告、不修改永久系统设置。
 
 ## 读懂结果
@@ -94,6 +121,23 @@ report.txt 为摘要。report.json 包含解析后的 argv、EXE SHA-256、设�
 编码只影响解码，不改子进程 locale。高限额/重复次数增加内存；超时不能抢占阻塞的
 Windows CreateProcess 或执行前的 EXE 哈希。
 
+### 可选：识别一个预期失败
+
+沿用上面的变量，以下模拟命令故意只在非 ASCII cwd 中退出 23。
+它是安全的自建故障样例，不声称任何第三方应用存在故障。
+
+~~~powershell
+$failureReport = Join-Path $reportParent ('expected-failure-' + [guid]::NewGuid().ToString('N'))
+$failureCode = 'import os, sys; sys.exit(23 if not os.getcwd().isascii() else 0)'
+& $pythonExe .\cwdprobe-0.1.0.pyz --root $testRoot --report $failureReport -- $pythonExe -c $failureCode
+$failureExit = $LASTEXITCODE
+Get-Content (Join-Path $failureReport 'report.txt')
+"cwdprobe exit: $failureExit"
+~~~
+
+预期 `FAIL / PATH_SENSITIVE_FAILURE`，退出码 1：英文、空格、标点路径成功，
+中文、日文、韩文路径退出 23。这个预期 FAIL 表示工具观察到了模拟故障，不是工具运行失败。
+
 ## 清理与排错
 
 正常完成只删除自己新建并验证归属的 cwdprobe-<id> 目录。根目录和报告保留，报告由用户
@@ -112,6 +156,28 @@ Windows CreateProcess 或执行前的 EXE 哈希。
 
 清理采用验证后的 Windows 句柄，拒绝重解析点、硬链接、归属替换和特殊文件。
 owner 不完整时保留目录，报告 cleanup FAIL 和原始错误。勿并发修改活动运行树。
+
+## 反馈
+
+遇到 Bug、配置障碍、成功案例或建议，可[提交 Issue](https://github.com/QSO41/cwdprobe/issues)。
+简短说明以下信息即可：
+
+1. Windows 版本/架构、Python 版本、cwdprobe 版本。
+2. 执行的测试命令，必要时对敏感参数脱敏。
+3. 预期结果与实际结果，方便时附 status/finding。
+4. 哪一步让你卡住。
+5. 是否比原有脚本更方便，以及原因。
+
+分享前检查本地路径、命令参数和程序输出，删除私人信息。
+不要求完整日志/报告、Stars 或公开业务源码；JSON 中的 base64 输出也没有脱敏。
+
+## 源码方式（可选）
+
+在克隆/解压的源码目录，直接运行 `python -m cwdprobe --version` 或
+`python -m cwdprobe --help`，无需安装运行时第三方包。
+把上文的 `& $pythonExe .\cwdprobe-0.1.0.pyz` 换成 `python -m cwdprobe` 即可从源码运行。
+也可在自己的环境中 `python -m pip install .` 安装，构建需要 setuptools。
+`examples/relative_io.py` 是额外源码示例，Release 快速开始不依赖它。
 
 ## 范围、开发与 CI
 
